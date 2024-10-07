@@ -1,0 +1,67 @@
+---
+- name: Configure app instances
+  hosts: app_instances
+  become: yes
+  tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Run Foo app container
+      docker_container:
+        name: foo_app
+        image: mattcul/assignment2app:1.0.0
+        state: started
+        restart_policy: always
+        ports:
+          - "80:3001"
+        env:
+          PORT: "3001"
+          DB_HOSTNAME: "{{ hostvars['db_instance']['ansible_host'] }}"
+          DB_PORT: "5432"
+          DB_USERNAME: "pete"
+          DB_PASSWORD: "devops"
+
+- name: Configure database instance
+  hosts: db_instance
+  become: yes
+  tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Copy database snapshot
+      copy:
+        src: misc/snapshot-prod-data.sql
+        dest: /tmp/snapshot-prod-data.sql
+
+    - name: Run PostgreSQL container
+      docker_container:
+        name: foo_db
+        image: postgres:14.7
+        state: started
+        restart_policy: always
+        ports:
+          - "5432:5432"
+        env:
+          POSTGRES_PASSWORD: "devops"
+          POSTGRES_USER: "pete"
+          POSTGRES_DB: "foo"
+        volumes:
+          - "/tmp/snapshot-prod-data.sql:/docker-entrypoint-initdb.d/init.sql"
